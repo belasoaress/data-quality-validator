@@ -1,0 +1,31 @@
+id_pedido,cliente,email,data_pedido,valor,status
+1001,Marina Alves,marina.alves@gmail.com,2025-01-12,189.90,pago
+1002,João Pedro Souza,joao.souza@hotmail.com,2025-01-15,45.00,entregue
+1003,Carla Menezes,carla.menezes@yahoo.com,2025-01-18,302.50,pago
+1004,Rafael Costa,,2025-01-20,78.20,pendente
+1005,Beatriz Lima,beatriz.lima@gmail.com,2025-01-22,150.00,pago
+1006,,gabriel.rocha@outlook.com,2025-01-23,99.99,entregue
+1007,Thiago Fernandes,thiago.f@gmail.com,2025-01-25,220.00,cancelado
+1008,Larissa Prado,larissa.pradoyahoo.com,2025-01-28,63.40,pago
+1009,Eduardo Martins,eduardo.martins@gmail.com,2025-01-30,410.00,entregue
+1010,Fernanda Dias,fernanda.dias@hotmail.com,2025-02-02,abc,pago
+1011,Vinícius Ramos,vinicius.ramos@gmail.com,2025-02-04,88.00,pendente
+1012,Camila Nogueira,camila.nogueira@gmail.com,2025-02-05,-45.00,cancelado
+1013,Bruno Teixeira,bruno.teixeira@yahoo.com,2025-02-07,175.30,pago
+1014,Patrícia Gomes,patricia.gomes@gmail.com,2025-02-09,60.00,entregue
+1015,Diego Barbosa,diego.barbosa@outlook.com,2025-02-10,132.90,pago
+1015,Diego Barbosa,diego.barbosa@outlook.com,2025-02-10,132.90,pago
+1016,Juliana Castro,juliana.castro@gmail.com,2025-02-12,95.50,pendente
+1017,Gustavo Pereira,gustavo.pereira@gmail.com,2025-02-14,310.00,entregue
+1017,Gustavo Pereira,gustavo.pereira@gmail.com,15/02/2025,310.00,pago
+1018,Renata Almeida,renata.almeida@yahoo.com,2025-02-16,58.00,pago
+1019,Felipe Andrade,felipe.andrade@gmail.com,2025-02-18,199.99,cancelado
+1020,Aline Ribeiro,aline.ribeiro@hotmail.com,2025-02-19,72.10,entregue
+1021,Marcelo Cunha,marcelo.cunha@gmail.com,2025-02-21,,pago
+1022,Isabela Rocha,isabela.rocha@gmail.com,2025-02-23,245.00,pendente
+1023,Leonardo Freitas,leonardo.freitas@outlook.com,2025-02-25,112.40,pago
+1024,Natália Correia,natalia.correia@gmail.com,2025-02-27,68.90,entregue
+1025,André Moura,andre.moura@yahoo.com,2025-03-01,540.00,pago
+1026,Simone Vieira,simone.vieira@gmail.com,2025-03-03,39.90,cancelado
+1027,Rodrigo Sales,rodrigo.sales@hotmail.com,2025-03-05,128.00,pago
+1028,Vanessa Duarte,vanessa.duarte@gmail.com,2025-03-07,205.60,entregue
