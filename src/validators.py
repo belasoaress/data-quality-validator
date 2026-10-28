@@ -16,20 +16,35 @@ relatório final decide o que fazer com isso (ex: omitir a seção).
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DATE_FORMAT = "%Y-%m-%d"
 DATA_MIN = datetime(2020, 1, 1)
-DATA_MAX = datetime(2026, 12, 31)
+# Datas no futuro são suspeitas; a folga de 1 dia cobre diferenças de fuso.
+# Calculado na hora da validação (e não fixo) para a regra não "vencer" com o tempo.
+FOLGA_FUTURO = timedelta(days=1)
+
+# Nomes das colunas que as regras específicas esperam. Se o CSV não tiver
+# alguma delas, a regra correspondente é pulada em vez de quebrar o programa.
+COL_ID = "id_pedido"
+COL_VALOR = "valor"
+COL_DATA = "data_pedido"
+COL_EMAIL = "email"
+
+
+def _data_max() -> datetime:
+    return datetime.now() + FOLGA_FUTURO
 
 
 def _amostra(df, mask, colunas_exibir, limite=3):
     """Extrai até `limite` linhas afetadas como lista de dicts, sempre incluindo id_pedido."""
     linhas = df.loc[mask]
-    colunas = ["id_pedido"] + [c for c in colunas_exibir if c != "id_pedido"]
+    colunas = [c for c in colunas_exibir if c != COL_ID]
+    if COL_ID in df.columns:
+        colunas = [COL_ID] + colunas
     return linhas[colunas].head(limite).to_dict(orient="records")
 
 
@@ -64,19 +79,25 @@ def check_duplicates(df: pd.DataFrame) -> list:
             "coluna": "todas",
             "tipo": "duplicata_completa",
             "quantidade": qtd,
-            "exemplos": _amostra(df, mask_completa, list(df.columns)),
+            "exemplos": _amostra(df, df.duplicated(keep="first"), list(df.columns)),
         })
 
-    # Duplicatas por chave (id_pedido repetido, mesmo com dados diferentes)
-    mask_chave = df.duplicated(subset=["id_pedido"], keep=False)
-    if mask_chave.any():
-        qtd_chaves = int(df.loc[mask_chave, "id_pedido"].nunique())
-        problemas.append({
-            "coluna": "id_pedido",
-            "tipo": "duplicata_por_chave",
-            "quantidade": qtd_chaves,
-            "exemplos": _amostra(df, mask_chave, list(df.columns)),
-        })
+    # Duplicatas por chave: o mesmo id_pedido com dados DIFERENTES entre as
+    # linhas. Cópias idênticas já foram reportadas acima como duplicata
+    # completa, então são removidas antes para não contar o mesmo problema duas vezes.
+    if COL_ID in df.columns:
+        sem_copias = df.drop_duplicates(keep="first")
+        ids_divergentes = sem_copias.loc[
+            sem_copias.duplicated(subset=[COL_ID], keep=False), COL_ID
+        ].unique()
+        if len(ids_divergentes) > 0:
+            mask_chave = df[COL_ID].isin(ids_divergentes) & ~df.duplicated(keep="first")
+            problemas.append({
+                "coluna": COL_ID,
+                "tipo": "duplicata_por_chave",
+                "quantidade": int(len(ids_divergentes)),
+                "exemplos": _amostra(df, mask_chave, list(df.columns)),
+            })
 
     return problemas
 
@@ -84,7 +105,9 @@ def check_duplicates(df: pd.DataFrame) -> list:
 def check_type_consistency(df: pd.DataFrame) -> list:
     """Valores não numéricos numa coluna que deveria ser numérica (valor)."""
     problemas = []
-    coluna = "valor"
+    coluna = COL_VALOR
+    if coluna not in df.columns:
+        return problemas
 
     def eh_numerico(v):
         if pd.isna(v) or str(v).strip() == "":
@@ -110,6 +133,8 @@ def check_type_consistency(df: pd.DataFrame) -> list:
 def check_value_ranges(df: pd.DataFrame) -> list:
     """Valores fora do intervalo esperado: valor negativo, data fora de intervalo plausível."""
     problemas = []
+    if COL_VALOR not in df.columns and COL_DATA not in df.columns:
+        return problemas
 
     # valor negativo
     def eh_negativo(v):
@@ -118,31 +143,32 @@ def check_value_ranges(df: pd.DataFrame) -> list:
         except (TypeError, ValueError):
             return False
 
-    mask_valor = df["valor"].apply(eh_negativo)
+    mask_valor = df[COL_VALOR].apply(eh_negativo) if COL_VALOR in df.columns else pd.Series(False, index=df.index)
     qtd_valor = int(mask_valor.sum())
     if qtd_valor > 0:
         problemas.append({
-            "coluna": "valor",
+            "coluna": COL_VALOR,
             "tipo": "valor_fora_do_intervalo",
             "quantidade": qtd_valor,
             "exemplos": _amostra(df, mask_valor, ["valor"]),
         })
 
-    # data fora de um intervalo plausível (mas só considera datas que já
-    # estão no formato certo; formato errado é pego por check_email_format... 
-    # -> na verdade por uma checagem própria de formato, ver função abaixo)
+    # Data fora de um intervalo plausível. Só considera datas que já estão no
+    # formato certo; formato errado é reportado por check_format.
+    data_max = _data_max()
+
     def data_fora_do_intervalo(v):
         try:
             d = datetime.strptime(str(v), DATE_FORMAT)
-            return not (DATA_MIN <= d <= DATA_MAX)
+            return not (DATA_MIN <= d <= data_max)
         except (TypeError, ValueError):
             return False  # formato inválido é outro tipo de problema
 
-    mask_data = df["data_pedido"].apply(data_fora_do_intervalo)
+    mask_data = df[COL_DATA].apply(data_fora_do_intervalo) if COL_DATA in df.columns else pd.Series(False, index=df.index)
     qtd_data = int(mask_data.sum())
     if qtd_data > 0:
         problemas.append({
-            "coluna": "data_pedido",
+            "coluna": COL_DATA,
             "tipo": "valor_fora_do_intervalo",
             "quantidade": qtd_data,
             "exemplos": _amostra(df, mask_data, ["data_pedido"]),
@@ -161,11 +187,11 @@ def check_format(df: pd.DataFrame) -> list:
             return False  # nulo é tratado por check_nulls
         return not bool(EMAIL_REGEX.match(str(v)))
 
-    mask_email = df["email"].apply(email_invalido)
+    mask_email = df[COL_EMAIL].apply(email_invalido) if COL_EMAIL in df.columns else pd.Series(False, index=df.index)
     qtd_email = int(mask_email.sum())
     if qtd_email > 0:
         problemas.append({
-            "coluna": "email",
+            "coluna": COL_EMAIL,
             "tipo": "formato_invalido",
             "quantidade": qtd_email,
             "exemplos": _amostra(df, mask_email, ["email"]),
@@ -181,11 +207,11 @@ def check_format(df: pd.DataFrame) -> list:
         except ValueError:
             return True
 
-    mask_data = df["data_pedido"].apply(data_formato_invalido)
+    mask_data = df[COL_DATA].apply(data_formato_invalido) if COL_DATA in df.columns else pd.Series(False, index=df.index)
     qtd_data = int(mask_data.sum())
     if qtd_data > 0:
         problemas.append({
-            "coluna": "data_pedido",
+            "coluna": COL_DATA,
             "tipo": "formato_invalido",
             "quantidade": qtd_data,
             "exemplos": _amostra(df, mask_data, ["data_pedido"]),

@@ -1,0 +1,19 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest
+      # Os testes não chamam a API da Claude: nenhuma chave é necessária.
+      - run: pytest -q
+      - run: python main.py data/pedidos_exemplo.csv --skip-summary
