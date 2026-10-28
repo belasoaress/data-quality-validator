@@ -39,7 +39,9 @@ data-quality-validator/
 │   ├── validators.py        # as 5 regras de validação
 │   ├── report.py            # monta o relatório técnico em markdown
 │   └── summarizer.py        # chama a API da Claude para o resumo executivo
-└── output/
+├── tests/                   # pytest: regras, dataset de exemplo e API (mock)
+├── .github/workflows/       # CI que roda os testes
+└── output/                  # gerado ao rodar (não versionado)
     ├── relatorio_tecnico.md
     └── resumo_executivo.md
 ```
@@ -61,6 +63,13 @@ explicar (e testar) cada uma separadamente:
 5. **`check_format`** — formato inválido (ex: e-mail sem `@`/domínio, data
    fora do padrão `YYYY-MM-DD`).
 
+`check_nulls` e as duplicatas completas funcionam em qualquer CSV. As demais
+regras usam os nomes de coluna definidos no topo de `src/validators.py`
+(`id_pedido`, `valor`, `data_pedido`, `email`); se o CSV não tiver alguma
+dessas colunas, a regra correspondente é pulada em vez de quebrar a execução.
+A data máxima aceita é calculada na hora (hoje + 1 dia), então a regra não
+fica desatualizada com o tempo.
+
 ## Como rodar
 
 ```bash
@@ -79,10 +88,8 @@ python main.py data/pedidos_exemplo.csv --skip-summary
 ## Exemplo de execução
 
 Rodando contra o dataset sintético incluído (`data/pedidos_exemplo.csv`, 30
-linhas, com 9 problemas plantados deliberadamente), o comando gera dois
-arquivos em `output/`. Abaixo, um recorte de cada um, lado a lado:
-
-### Relatório técnico (`output/relatorio_tecnico.md`)
+linhas, com 9 problemas plantados deliberadamente), o comando gera o
+relatório técnico em `output/relatorio_tecnico.md`. Recorte da saída real:
 
 ```markdown
 # Relatório Técnico de Qualidade de Dados
@@ -94,11 +101,10 @@ arquivos em `output/`. Abaixo, um recorte de cada um, lado a lado:
 ---
 
 ### Duplicata por chave (id_pedido repetido) — coluna `id_pedido`
-- **Quantidade de ocorrências:** 2
+- **Quantidade de ocorrências:** 1
 - **Exemplos de linhas afetadas:**
-  - `id_pedido=1015, cliente=Diego Barbosa, ...`
-  - `id_pedido=1017, cliente=Gustavo Pereira, status=entregue`
-  - `id_pedido=1017, cliente=Gustavo Pereira, status=pago, data_pedido=15/02/2025`
+  - `id_pedido=1017, ..., data_pedido=2025-02-14, valor=310.00, status=entregue`
+  - `id_pedido=1017, ..., data_pedido=15/02/2025, valor=310.00, status=pago`
 
 ### Inconsistência de tipo — coluna `valor`
 - **Quantidade de ocorrências:** 1
@@ -113,44 +119,23 @@ arquivos em `output/`. Abaixo, um recorte de cada um, lado a lado:
 (... demais seções: duplicata completa, valores nulos, formato inválido ...)
 ```
 
-### Resumo executivo (`output/resumo_executivo.md`)
+Com a chave configurada, o mesmo relatório é enviado ao Claude Haiku, que
+devolve o resumo executivo em `output/resumo_executivo.md`. O `system prompt`
+em `src/summarizer.py` define as regras do resumo: sem jargão técnico, problemas
+em ordem de gravidade, impacto no negócio explicado em 1-2 frases com um
+exemplo concreto (o número do pedido) e uma recomendação final sem alarmismo.
 
-> **Nota:** este projeto não teve acesso à internet durante seu
-> desenvolvimento, então o trecho abaixo é um **exemplo ilustrativo** do
-> formato de saída esperado — escrito manualmente seguindo exatamente as
-> regras do `system prompt` usado em `summarizer.py` — e não uma resposta
-> real gerada pela API. Ao rodar o projeto localmente com sua chave, o
-> conteúdo real será gerado pelo Claude Haiku a partir do relatório técnico
-> acima.
+## Testes
 
+```bash
+pip install pytest
+pytest -q
 ```
-Encontramos alguns pontos que merecem atenção antes de fechar os números do
-período.
 
-O mais importante: o pedido 1017 aparece duas vezes com informações
-diferentes entre si (uma versão diz que foi entregue, outra que só foi pago,
-e as datas também não batem). Isso é um risco real, porque não dá pra saber
-qual das duas versões está correta, e relatórios de vendas ou de entrega
-podem sair errados por causa disso.
-
-Também identificamos um pedido (1010) em que o valor cobrado não é um número
-válido — está registrado como texto. Isso pode travar qualquer cálculo de
-faturamento que inclua esse pedido. Já o pedido 1012 tem um valor negativo,
-o que normalmente não faz sentido para uma venda e vale conferir se não foi
-um erro de digitação ou um estorno mal lançado.
-
-Um pedido (1015) foi registrado duas vezes de forma idêntica, o que pode
-inflar artificialmente o total de vendas se ninguém remover a duplicata.
-
-Por fim, alguns registros têm campos em branco (nome do cliente, e-mail ou
-valor faltando), e um e-mail está com o formato errado (sem o símbolo @),
-o que pode impedir o envio de notificações pra esse cliente.
-
-Recomendamos revisar esses casos, especialmente o pedido 1017, antes de usar
-esses dados para relatórios ou faturamento. Nenhum desses problemas exige uma
-ação de emergência, mas quanto antes forem corrigidos, menor o risco de
-propagarem erro para outras áreas do negócio.
-```
+Os testes cobrem cada regra de validação isoladamente, o dataset de exemplo
+(os 9 problemas plantados precisam ser encontrados) e a integração com a API
+usando um cliente falso — nenhuma chave é necessária. O GitHub Actions roda a
+suíte a cada push e pull request.
 
 ## Por que a tradução para linguagem simples importa
 
